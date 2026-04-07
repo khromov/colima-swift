@@ -26,23 +26,31 @@ struct LogsWindowView: View {
                         ForEach(store.entries) { entry in
                             row(entry).id(entry.id)
                         }
+                        // Bottom visual gap, part of the scrollable content so the
+                        // sentinel (below) includes it as the true "end of content".
+                        Color.clear.frame(height: 8)
+                        // Stable scroll target — always the end of the log.
+                        Color.clear.frame(height: 1).id(Self.bottomID)
                     }
                     .padding(8)
-                    .padding(.bottom, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .onChange(of: store.entries.count) { _ in
-                    guard followLog, let last = store.entries.last else { return }
-                    proxy.scrollTo(last.id, anchor: .bottom)
+                    guard followLog else { return }
+                    // Defer one runloop tick so the new row is laid out before we
+                    // ask the proxy to scroll to the sentinel past it.
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(Self.bottomID, anchor: .bottom)
+                    }
                 }
                 .onChange(of: followLog) { newValue in
-                    if newValue, let last = store.entries.last {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                    if newValue {
+                        proxy.scrollTo(Self.bottomID, anchor: .bottom)
                     }
                 }
                 .onAppear {
-                    if followLog, let last = store.entries.last {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                    if followLog {
+                        proxy.scrollTo(Self.bottomID, anchor: .bottom)
                     }
                 }
             }
@@ -78,4 +86,6 @@ struct LogsWindowView: View {
         f.dateFormat = "HH:mm:ss.SSS"
         return f
     }()
+
+    private static let bottomID = "logs.bottom"
 }
