@@ -15,8 +15,8 @@ final class ColimaController: ObservableObject {
         didSet { UserDefaults.standard.set(pollIntervalSeconds, forKey: pollIntervalDefaultsKey) }
     }
 
-    private let colimaPath = "/opt/homebrew/bin/colima"
-    private let dockerPath = "/opt/homebrew/bin/docker"
+    private let colimaPath: String?
+    private let dockerPath: String?
     private let psPath     = "/bin/ps"
     private let profile    = "default"
     private let pollIntervalDefaultsKey = "pollIntervalSeconds"
@@ -25,6 +25,28 @@ final class ColimaController: ObservableObject {
 
     init() {
         LogStore.shared.append(.info, source: "app", "ColimaController initialized")
+
+        // Resolve external tools once at startup. `ps` is POSIX and always
+        // at /bin/ps, but colima and docker may live in any of several
+        // Homebrew / MacPorts / Nix / custom locations.
+        let resolvedColima = Shell.resolveTool("colima")
+        let resolvedDocker = Shell.resolveTool("docker")
+        self.colimaPath = resolvedColima
+        self.dockerPath = resolvedDocker
+
+        if let resolvedColima {
+            LogStore.shared.append(.info, source: "app", "Resolved colima → \(resolvedColima)")
+        } else {
+            let msg = "colima not found. Install it (e.g. `brew install colima`) or add its directory to your PATH, then relaunch ColimaSwift."
+            self.lastError = msg
+            LogStore.shared.append(.error, source: "app", msg)
+        }
+        if let resolvedDocker {
+            LogStore.shared.append(.info, source: "app", "Resolved docker → \(resolvedDocker)")
+        } else {
+            LogStore.shared.append(.warn, source: "app", "docker not found in known locations; container counts will be unavailable")
+        }
+
         self.launchAtLogin = (SMAppService.mainApp.status == .enabled)
         if let saved = UserDefaults.standard.object(forKey: pollIntervalDefaultsKey) as? Int {
             self.pollIntervalSeconds = max(1, saved)
@@ -75,6 +97,11 @@ final class ColimaController: ObservableObject {
 
     private func perform(action: String, transient: ColimaStatus) {
         guard !busy else { return }
+        guard let colimaPath else {
+            lastError = "colima not found — cannot \(action). Install colima and relaunch."
+            LogStore.shared.append(.error, source: "controller", "Action \(action) aborted: colima not resolved")
+            return
+        }
         busy = true
         status = transient
         LogStore.shared.append(.info, source: "controller", "User: \(action)")
@@ -124,6 +151,7 @@ final class ColimaController: ObservableObject {
     }
 
     private func loadInstance() async -> ColimaInstance? {
+        guard let colimaPath else { return nil }
         do {
             let out = try await Shell.run(colimaPath, ["list", "--json"])
             // `colima list --json` emits one JSON object per line.
@@ -162,6 +190,7 @@ final class ColimaController: ObservableObject {
     }
 
     private func loadDockerStats() async -> DockerStats? {
+        guard let dockerPath else { return nil }
         do {
             let out = try await Shell.run(dockerPath, ["ps", "-a", "--format", "{{.State}}"])
             let lines = out.split(whereSeparator: \.isNewline).map(String.init)

@@ -6,6 +6,51 @@ enum ShellError: Error {
 }
 
 enum Shell {
+    /// Directories to probe when locating external tools, and to prepend to
+    /// child processes' `PATH` so colima can find its own helpers (docker,
+    /// limactl, qemu, …). Order matters — earlier entries win.
+    static let searchDirs: [String] = {
+        let nix = NSString(string: "~/.nix-profile/bin").expandingTildeInPath
+        return [
+            "/opt/homebrew/bin",        // Homebrew (Apple Silicon)
+            "/usr/local/bin",           // Homebrew (Intel) / manual installs
+            "/opt/local/bin",           // MacPorts
+            nix,                        // Nix single-user profile
+            "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+        ]
+    }()
+
+    /// Locates an executable by name via `/usr/bin/which`, giving it a `PATH`
+    /// that unions the inherited environment with `searchDirs` (so the lookup
+    /// works even when the app was launched with an empty PATH from Finder).
+    /// Returns an absolute path, or nil if `which` couldn't find it.
+    static func resolveTool(_ name: String) -> String? {
+        let which = Process()
+        which.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        which.arguments = [name]
+
+        var env = ProcessInfo.processInfo.environment
+        let extras = searchDirs.joined(separator: ":")
+        env["PATH"] = env["PATH"].map { "\($0):\(extras)" } ?? extras
+        which.environment = env
+
+        let pipe = Pipe()
+        which.standardOutput = pipe
+        which.standardError = Pipe()
+        do {
+            try which.run()
+            which.waitUntilExit()
+            guard which.terminationStatus == 0,
+                  let data = try? pipe.fileHandleForReading.readToEnd(),
+                  let raw = String(data: data, encoding: .utf8)
+            else { return nil }
+            let path = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return path.isEmpty ? nil : path
+        } catch {
+            return nil
+        }
+    }
+
     /// Runs an external tool and returns its stdout. Throws on non-zero exit.
     /// Tool must be an absolute path; the app may be unsandboxed and $PATH is unreliable.
     @discardableResult
@@ -90,7 +135,7 @@ enum Shell {
 
         // Inherit a sane PATH so colima can find docker/limactl in subprocess invocations.
         var env = ProcessInfo.processInfo.environment
-        let extras = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        let extras = searchDirs.joined(separator: ":")
         env["PATH"] = env["PATH"].map { "\($0):\(extras)" } ?? extras
         p.environment = env
 
