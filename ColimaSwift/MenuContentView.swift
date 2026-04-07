@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuContentView: View {
     @EnvironmentObject var controller: ColimaController
+    @State private var showSettings: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -12,9 +13,13 @@ struct MenuContentView: View {
             actions
             Divider()
             footer
+            if showSettings {
+                Divider()
+                settingsPanel
+            }
         }
         .padding(10)
-        .frame(width: 320)
+        .frame(width: 270)
     }
 
     // MARK: - Header
@@ -108,29 +113,40 @@ struct MenuContentView: View {
             Text("Logs")
                 .foregroundStyle(.secondary)
                 .onTapGesture { AppDelegate.shared?.showLogsWindow() }
+            Text("Settings")
+                .foregroundStyle(.secondary)
+                .onTapGesture { showSettings.toggle() }
+            Spacer()
+            Text("Quit")
+                .foregroundStyle(.secondary)
+                .onTapGesture { NSApplication.shared.terminate(nil) }
+        }
+        .font(.system(size: 11))
+        .padding(.horizontal, 6)
+    }
+
+    // MARK: - Settings Panel
+
+    private var settingsPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: Binding(
                 get: { controller.launchAtLogin },
                 set: { controller.setLaunchAtLogin($0) }
             )) {
                 Text("Autostart")
-                    .foregroundStyle(.secondary)
                     .padding(.leading, 4)
             }
             .toggleStyle(.checkbox)
             .controlSize(.mini)
-            Spacer()
-            Text("Refresh every")
-                .foregroundStyle(.secondary)
-            TextField("", value: $controller.pollIntervalSeconds, format: .number)
-                .textFieldStyle(.roundedBorder)
-                .controlSize(.mini)
-                .frame(width: 32)
-            Text("s")
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text("Quit")
-                .foregroundStyle(.secondary)
-                .onTapGesture { NSApplication.shared.terminate(nil) }
+
+            HStack(spacing: 6) {
+                Text("Refresh every")
+                TextField("", value: $controller.pollIntervalSeconds, format: .number)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.mini)
+                    .frame(width: 40)
+                Text("seconds")
+            }
         }
         .font(.system(size: 11))
         .padding(.horizontal, 6)
