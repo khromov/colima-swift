@@ -97,6 +97,7 @@ enum Shell {
         let outPipe = Pipe()
         let errPipe = Pipe()
         p.standardOutput = outPipe
+        p.standardError = errPipe
         return (p, outPipe, errPipe)
     }
 
