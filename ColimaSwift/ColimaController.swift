@@ -11,12 +11,12 @@ final class ColimaController: ObservableObject {
     @Published private(set) var busy: Bool = false
     @Published var lastError: String?
     @Published var launchAtLogin: Bool = false
+    @Published var pollIntervalSeconds: Int = 5
 
     private let colimaPath = "/opt/homebrew/bin/colima"
     private let dockerPath = "/opt/homebrew/bin/docker"
     private let psPath     = "/bin/ps"
     private let profile    = "default"
-    private let pollInterval: UInt64 = 5 * 1_000_000_000  // 5 s
 
     private var pollTask: Task<Void, Never>?
 
@@ -27,7 +27,8 @@ final class ColimaController: ObservableObject {
             guard let self else { return }
             await self.refresh()
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: self.pollInterval)
+                let seconds = max(1, self.pollIntervalSeconds)
+                try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
                 if Task.isCancelled { break }
                 if !self.busy {
                     await self.refresh()

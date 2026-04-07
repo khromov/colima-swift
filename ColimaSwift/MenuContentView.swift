@@ -104,31 +104,35 @@ struct MenuContentView: View {
     // MARK: - Footer
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Toggle("Launch at login", isOn: Binding(
+        HStack(spacing: 12) {
+            Text("Logs")
+                .foregroundStyle(.secondary)
+                .onTapGesture { AppDelegate.shared?.showLogsWindow() }
+            Toggle(isOn: Binding(
                 get: { controller.launchAtLogin },
                 set: { controller.setLaunchAtLogin($0) }
-            ))
-            .toggleStyle(.checkbox)
-            .font(.system(size: 11))
-
-            HStack(spacing: 12) {
-                Text("Refresh")
-                    .foregroundStyle(controller.busy ? Color.secondary.opacity(0.5) : .secondary)
-                    .onTapGesture {
-                        guard !controller.busy else { return }
-                        Task { await controller.refresh() }
-                    }
-                Text("Logs")
+            )) {
+                Text("Autostart")
                     .foregroundStyle(.secondary)
-                    .onTapGesture { AppDelegate.shared?.showLogsWindow() }
-                Spacer()
-                Text("Quit")
-                    .foregroundStyle(.secondary)
-                    .onTapGesture { NSApplication.shared.terminate(nil) }
+                    .padding(.leading, 4)
             }
-            .font(.system(size: 11))
+            .toggleStyle(.checkbox)
+            .controlSize(.mini)
+            Spacer()
+            Text("Refresh every")
+                .foregroundStyle(.secondary)
+            TextField("", value: $controller.pollIntervalSeconds, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.mini)
+                .frame(width: 32)
+            Text("s")
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text("Quit")
+                .foregroundStyle(.secondary)
+                .onTapGesture { NSApplication.shared.terminate(nil) }
         }
+        .font(.system(size: 11))
         .padding(.horizontal, 6)
     }
 

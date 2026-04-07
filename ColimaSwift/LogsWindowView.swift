@@ -2,21 +2,27 @@ import SwiftUI
 
 struct LogsWindowView: View {
     @ObservedObject private var store = LogStore.shared
+    @State private var followLog: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 12) {
                 Text("\(store.entries.count) entries")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Clear") { store.clear() }
+                Toggle("Follow log", isOn: $followLog)
+                    .toggleStyle(.checkbox)
             }
             .padding(8)
             Divider()
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
+                    // Non-lazy VStack so every row is realized — proxy.scrollTo
+                    // can target any id without waiting for layout. The 1000-entry
+                    // cap keeps this affordable.
+                    VStack(alignment: .leading, spacing: 2) {
                         ForEach(store.entries) { entry in
                             row(entry).id(entry.id)
                         }
@@ -25,10 +31,17 @@ struct LogsWindowView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .onChange(of: store.entries.count) { _ in
-                    if let last = store.entries.last {
-                        withAnimation(.linear(duration: 0.1)) {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        }
+                    guard followLog, let last = store.entries.last else { return }
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
+                .onChange(of: followLog) { newValue in
+                    if newValue, let last = store.entries.last {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
+                }
+                .onAppear {
+                    if followLog, let last = store.entries.last {
+                        proxy.scrollTo(last.id, anchor: .bottom)
                     }
                 }
             }
