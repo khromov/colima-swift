@@ -1,4 +1,5 @@
 import Foundation
+import ServiceManagement
 import SwiftUI
 
 @MainActor
@@ -8,7 +9,8 @@ final class ColimaController: ObservableObject {
     @Published private(set) var processMetrics: VMProcessMetrics?
     @Published private(set) var dockerStats: DockerStats?
     @Published private(set) var busy: Bool = false
-    @Published private(set) var lastError: String?
+    @Published var lastError: String?
+    @Published var launchAtLogin: Bool = false
 
     private let colimaPath = "/opt/homebrew/bin/colima"
     private let dockerPath = "/opt/homebrew/bin/docker"
@@ -20,6 +22,7 @@ final class ColimaController: ObservableObject {
 
     init() {
         LogStore.shared.append(.info, source: "app", "ColimaController initialized")
+        self.launchAtLogin = (SMAppService.mainApp.status == .enabled)
         pollTask = Task { [weak self] in
             guard let self else { return }
             await self.refresh()
@@ -43,6 +46,26 @@ final class ColimaController: ObservableObject {
     func stop()    { perform(action: "stop",    transient: .stopping) }
     func restart() { perform(action: "restart", transient: .starting) }
 
+    func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled {
+                if SMAppService.mainApp.status != .enabled {
+                    try SMAppService.mainApp.register()
+                }
+            } else {
+                if SMAppService.mainApp.status != .notRegistered {
+                    try SMAppService.mainApp.unregister()
+                }
+            }
+            launchAtLogin = (SMAppService.mainApp.status == .enabled)
+            LogStore.shared.append(.info, source: "app", "Launch at login: \(launchAtLogin)")
+        } catch {
+            lastError = "Launch at login failed: \(error.localizedDescription)"
+            LogStore.shared.append(.error, source: "app", "Launch at login error: \(error)")
+            launchAtLogin = (SMAppService.mainApp.status == .enabled)
+        }
+    }
+
     private func perform(action: String, transient: ColimaStatus) {
         guard !busy else { return }
         busy = true
@@ -56,7 +79,7 @@ final class ColimaController: ObservableObject {
                 }
             }
             do {
-                _ = try await Shell.run(colimaPath, [action])
+                _ = try await Shell.runStreaming(colimaPath, [action], source: "colima")
                 lastError = nil
                 LogStore.shared.append(.info, source: "controller", "Action complete: \(action)")
             } catch ShellError.nonZeroExit(_, let stderr) {
