@@ -28,6 +28,7 @@ struct LogsWindowView: View {
                         }
                     }
                     .padding(8)
+                    .padding(.bottom, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .onChange(of: store.entries.count) { _ in

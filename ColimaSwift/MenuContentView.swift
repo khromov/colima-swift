@@ -14,7 +14,7 @@ struct MenuContentView: View {
             footer
         }
         .padding(10)
-        .frame(width: 270)
+        .frame(width: 320)
     }
 
     // MARK: - Header
