@@ -19,6 +19,7 @@ final class ColimaController: ObservableObject {
     private var pollTask: Task<Void, Never>?
 
     init() {
+        LogStore.shared.append(.info, source: "app", "ColimaController initialized")
         pollTask = Task { [weak self] in
             guard let self else { return }
             await self.refresh()
@@ -46,6 +47,7 @@ final class ColimaController: ObservableObject {
         guard !busy else { return }
         busy = true
         status = transient
+        LogStore.shared.append(.info, source: "controller", "User: \(action)")
         Task {
             defer {
                 Task { @MainActor in
@@ -56,10 +58,14 @@ final class ColimaController: ObservableObject {
             do {
                 _ = try await Shell.run(colimaPath, [action])
                 lastError = nil
+                LogStore.shared.append(.info, source: "controller", "Action complete: \(action)")
             } catch ShellError.nonZeroExit(_, let stderr) {
-                lastError = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmed = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                lastError = trimmed
+                LogStore.shared.append(.error, source: "controller", "Action failed: \(action) — \(trimmed)")
             } catch {
                 lastError = "\(error)"
+                LogStore.shared.append(.error, source: "controller", "Action failed: \(action) — \(error)")
             }
         }
     }
@@ -69,8 +75,12 @@ final class ColimaController: ObservableObject {
     func refresh() async {
         let inst = await loadInstance()
         let newStatus: ColimaStatus = inst.map { ColimaStatus(rawColimaStatus: $0.status) } ?? .stopped
+        let oldStatus = self.status
         self.instance = inst
         self.status = newStatus
+        if oldStatus != newStatus {
+            LogStore.shared.append(.info, source: "controller", "Status: \(oldStatus.label) → \(newStatus.label)")
+        }
 
         if newStatus == .running {
             async let metrics = loadProcessMetrics()

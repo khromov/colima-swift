@@ -15,12 +15,16 @@ struct ColimaSwiftApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    static weak var shared: AppDelegate?
+
     private var controller: ColimaController!
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var cancellable: AnyCancellable?
+    private var logsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppDelegate.shared = self
         controller = ColimaController()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -44,6 +48,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.renderIcon(for: self.controller.status)
             }
         }
+    }
+
+    func showLogsWindow() {
+        if logsWindow == nil {
+            let host = NSHostingController(rootView: LogsWindowView())
+            let win = NSWindow(contentViewController: host)
+            win.title = "Colima Logs"
+            win.setContentSize(NSSize(width: 640, height: 400))
+            win.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+            win.isReleasedWhenClosed = false
+            win.center()
+            logsWindow = win
+        }
+        // LSUIElement apps don't auto-focus their windows; activate explicitly.
+        NSApp.activate(ignoringOtherApps: true)
+        logsWindow?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func togglePopover(_ sender: AnyObject?) {

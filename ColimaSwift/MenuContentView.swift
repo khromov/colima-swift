@@ -104,19 +104,23 @@ struct MenuContentView: View {
     // MARK: - Footer
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 12) {
             Text("Refresh")
                 .foregroundStyle(controller.busy ? Color.secondary.opacity(0.5) : .secondary)
                 .onTapGesture {
                     guard !controller.busy else { return }
                     Task { await controller.refresh() }
                 }
+            Text("Logs")
+                .foregroundStyle(.secondary)
+                .onTapGesture { AppDelegate.shared?.showLogsWindow() }
             Spacer()
             Text("Quit")
                 .foregroundStyle(.secondary)
                 .onTapGesture { NSApplication.shared.terminate(nil) }
         }
         .font(.system(size: 11))
+        .padding(.horizontal, 6)
     }
 
     // MARK: - Helpers

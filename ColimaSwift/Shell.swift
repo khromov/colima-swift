@@ -10,7 +10,11 @@ enum Shell {
     /// Tool must be an absolute path; the app may be unsandboxed and $PATH is unreliable.
     @discardableResult
     static func run(_ tool: String, _ args: [String], timeout: TimeInterval = 120) async throws -> String {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<String, Error>) in
+        let commandLine = ([tool] + args).joined(separator: " ")
+        let started = Date()
+        LogStore.log(.info, source: "shell", "→ \(commandLine)")
+
+        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<String, Error>) in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: tool)
             process.arguments = args
@@ -31,9 +35,16 @@ enum Shell {
                 let errData = (try? errPipe.fileHandleForReading.readToEnd()) ?? Data()
                 let stdout = String(data: outData, encoding: .utf8) ?? ""
                 let stderr = String(data: errData, encoding: .utf8) ?? ""
+                let ms = Int(Date().timeIntervalSince(started) * 1000)
+
                 if proc.terminationStatus == 0 {
+                    let snippet = Self.firstLineSnippet(stdout, max: 200)
+                    let suffix = snippet.isEmpty ? "" : "  ·  \(snippet)"
+                    LogStore.log(.info, source: "shell", "✓ exit 0 (\(ms) ms)\(suffix)")
                     cont.resume(returning: stdout)
                 } else {
+                    let trimmed = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                    LogStore.log(.error, source: "shell", "✗ exit \(proc.terminationStatus) (\(ms) ms)  ·  \(trimmed)")
                     cont.resume(throwing: ShellError.nonZeroExit(code: proc.terminationStatus, stderr: stderr))
                 }
             }
@@ -41,8 +52,15 @@ enum Shell {
             do {
                 try process.run()
             } catch {
+                LogStore.log(.error, source: "shell", "✗ failed to launch \(tool): \(error)")
                 cont.resume(throwing: ShellError.launchFailed("\(error)"))
             }
         }
+    }
+
+    private static func firstLineSnippet(_ s: String, max: Int) -> String {
+        let line = s.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        if line.count <= max { return line }
+        return String(line.prefix(max)) + "…"
     }
 }

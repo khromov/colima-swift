@@ -42,6 +42,7 @@ $(APP_BUNDLE): $(SWIFT_SOURCES) $(INFO_PLIST) $(ENTITLEMENTS) Makefile
 	@echo "==> Built $(APP_BUNDLE)"
 
 run: $(APP_BUNDLE)
+	-@pkill -x $(APP_NAME) 2>/dev/null || true
 	open $(APP_BUNDLE)
 
 clean:
