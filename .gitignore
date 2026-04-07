@@ -1,0 +1,14 @@
+## Build
+build/
+DerivedData/
+*.xcuserstate
+
+## Xcode user data
+xcuserdata/
+*.xcuserdatad/
+*.xcworkspace/xcuserdata/
+ColimaSwift.xcodeproj/xcuserdata/
+ColimaSwift.xcodeproj/project.xcworkspace/xcuserdata/
+
+## Misc
+.DS_Store
