@@ -11,18 +11,24 @@ final class ColimaController: ObservableObject {
     @Published private(set) var busy: Bool = false
     @Published var lastError: String?
     @Published var launchAtLogin: Bool = false
-    @Published var pollIntervalSeconds: Int = 5
+    @Published var pollIntervalSeconds: Int = 5 {
+        didSet { UserDefaults.standard.set(pollIntervalSeconds, forKey: pollIntervalDefaultsKey) }
+    }
 
     private let colimaPath = "/opt/homebrew/bin/colima"
     private let dockerPath = "/opt/homebrew/bin/docker"
     private let psPath     = "/bin/ps"
     private let profile    = "default"
+    private let pollIntervalDefaultsKey = "pollIntervalSeconds"
 
     private var pollTask: Task<Void, Never>?
 
     init() {
         LogStore.shared.append(.info, source: "app", "ColimaController initialized")
         self.launchAtLogin = (SMAppService.mainApp.status == .enabled)
+        if let saved = UserDefaults.standard.object(forKey: pollIntervalDefaultsKey) as? Int {
+            self.pollIntervalSeconds = max(1, saved)
+        }
         pollTask = Task { [weak self] in
             guard let self else { return }
             await self.refresh()
