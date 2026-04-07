@@ -4,7 +4,7 @@ struct MenuContentView: View {
     @EnvironmentObject var controller: ColimaController
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             header
             Divider()
             metrics
@@ -13,8 +13,8 @@ struct MenuContentView: View {
             Divider()
             footer
         }
-        .padding(12)
-        .frame(width: 280)
+        .padding(10)
+        .frame(width: 270)
     }
 
     // MARK: - Header
@@ -87,10 +87,10 @@ struct MenuContentView: View {
                 Button("Stop") { controller.stop() }
                     .disabled(controller.busy || controller.status != .running)
                     .frame(maxWidth: .infinity)
+                Button("Restart") { controller.restart() }
+                    .disabled(controller.busy || controller.status != .running)
+                    .frame(maxWidth: .infinity)
             }
-            Button("Restart") { controller.restart() }
-                .disabled(controller.busy || controller.status != .running)
-                .frame(maxWidth: .infinity)
 
             if let err = controller.lastError, !err.isEmpty {
                 Text(err)
@@ -105,17 +105,18 @@ struct MenuContentView: View {
 
     private var footer: some View {
         HStack {
-            Button("Refresh") {
-                Task { await controller.refresh() }
-            }
-            .disabled(controller.busy)
+            Text("Refresh")
+                .foregroundStyle(controller.busy ? Color.secondary.opacity(0.5) : .secondary)
+                .onTapGesture {
+                    guard !controller.busy else { return }
+                    Task { await controller.refresh() }
+                }
             Spacer()
-            Button("Quit") {
-                NSApplication.shared.terminate(nil)
-            }
-            .keyboardShortcut("q")
+            Text("Quit")
+                .foregroundStyle(.secondary)
+                .onTapGesture { NSApplication.shared.terminate(nil) }
         }
-        .font(.system(size: 12))
+        .font(.system(size: 11))
     }
 
     // MARK: - Helpers

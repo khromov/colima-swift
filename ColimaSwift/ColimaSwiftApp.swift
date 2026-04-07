@@ -85,15 +85,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         color.setFill()
         NSBezierPath(ovalIn: rect).fill()
 
+        let font = NSFont.systemFont(ofSize: 13, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 13, weight: .bold),
+            .font: font,
             .foregroundColor: NSColor.white
         ]
         let text = NSAttributedString(string: "C", attributes: attrs)
-        let textSize = text.size()
+        // Center on cap-height rather than line-height so the glyph sits visually
+        // mid-circle. NSAttributedString.draw(at:) places the line box's bottom-left
+        // at `point` in a Y-up context; the baseline sits at point.y + |descender|.
+        let textWidth = text.size().width
+        let baselineY = (size.height - font.capHeight) / 2
         let point = NSPoint(
-            x: (size.width  - textSize.width)  / 2,
-            y: (size.height - textSize.height) / 2 - 0.5
+            x: (size.width - textWidth) / 2,
+            y: baselineY + font.descender
         )
         text.draw(at: point)
         return image
