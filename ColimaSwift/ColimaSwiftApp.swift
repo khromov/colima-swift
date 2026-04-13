@@ -99,8 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Draws a colored circle sized for the menu bar.
-    /// Shows the running-container count inside when > 0, otherwise "C".
+    /// Draws a colored circle with a white "C" sized for the menu bar.
+    /// When `runningContainers > 0`, draws a tiny count badge in the bottom-right corner.
     private static func makeStatusImage(color: NSColor, runningContainers: Int = 0) -> NSImage {
         let size = NSSize(width: 18, height: 18)
         let image = NSImage(size: size)
@@ -111,16 +111,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         color.setFill()
         NSBezierPath(ovalIn: rect).fill()
 
-        let label = runningContainers > 0 ? "\(runningContainers)" : "C"
-        let fontSize: CGFloat = runningContainers > 9 ? 10 : 13
-        let font = runningContainers > 0
-            ? NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .bold)
-            : NSFont.systemFont(ofSize: fontSize, weight: .bold)
+        // "C" label centered in the circle
+        let font = NSFont.systemFont(ofSize: 13, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor.white
         ]
-        let text = NSAttributedString(string: label, attributes: attrs)
+        let text = NSAttributedString(string: "C", attributes: attrs)
         let textWidth = text.size().width
         let baselineY = (size.height - font.capHeight) / 2
         let point = NSPoint(
@@ -128,6 +125,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             y: baselineY + font.descender
         )
         text.draw(at: point)
+
+        // Badge in bottom-right corner
+        if runningContainers > 0 {
+            let badgeFont = NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .bold)
+            let badgeAttrs: [NSAttributedString.Key: Any] = [
+                .font: badgeFont,
+                .foregroundColor: NSColor.white
+            ]
+            let badgeStr = NSAttributedString(string: "\(runningContainers)", attributes: badgeAttrs)
+            let badgeSize = badgeStr.size()
+            let padding: CGFloat = 2
+            let badgeW = max(badgeSize.width + padding * 2, badgeSize.height + padding)
+            let badgeH = badgeSize.height + padding
+            let badgeRect = NSRect(
+                x: size.width - badgeW,
+                y: 0,
+                width: badgeW,
+                height: badgeH
+            )
+            NSColor.systemOrange.setFill()
+            NSBezierPath(roundedRect: badgeRect, xRadius: badgeH / 2, yRadius: badgeH / 2).fill()
+            let textX = badgeRect.midX - badgeSize.width / 2
+            let textY = badgeRect.midY - badgeFont.capHeight / 2 + badgeFont.descender
+            badgeStr.draw(at: NSPoint(x: textX, y: textY))
+        }
+
         return image
     }
 }
