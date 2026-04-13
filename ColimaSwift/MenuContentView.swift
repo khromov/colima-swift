@@ -78,6 +78,7 @@ struct MenuContentView: View {
         }
         .font(.system(size: 11))
         .padding(.horizontal, 6)
+        .padding(.top, 6)
     }
 
     // MARK: - Settings Panel
