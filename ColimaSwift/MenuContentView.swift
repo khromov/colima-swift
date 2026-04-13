@@ -8,6 +8,7 @@ struct MenuContentView: View {
 
     var body: some View {
         @Bindable var manager = manager
+        GlassEffectContainer(spacing: 6) {
         ZStack {
             VStack(alignment: .leading, spacing: 0) {
                 if manager.controllers.isEmpty {
@@ -56,12 +57,13 @@ struct MenuContentView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Capsule().fill(.black.opacity(0.75)))
+                        .glassEffect(.regular.tint(.black.opacity(0.55)), in: .capsule)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                         .padding(.bottom, 8)
                 }
                 .allowsHitTesting(false)
             }
+        }
         }
     }
 
@@ -84,8 +86,9 @@ struct MenuContentView: View {
                 .onTapGesture { NSApplication.shared.terminate(nil) }
         }
         .font(.system(size: 11))
-        .padding(.horizontal, 6)
-        .padding(.top, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .glassEffect(.regular, in: .rect(cornerRadius: 8))
     }
 
     // MARK: - Settings Panel
@@ -113,8 +116,9 @@ struct MenuContentView: View {
             }
         }
         .font(.system(size: 11))
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 8)
         .padding(.vertical, 8)
+        .glassEffect(.regular, in: .rect(cornerRadius: 8))
     }
 }
 
@@ -279,7 +283,8 @@ private struct ProfileCardView: View {
         NSPasteboard.general.setString(text, forType: .string)
         let label = text.count > 30 ? String(text.prefix(30)) + "…" : text
         withAnimation(.easeInOut(duration: 0.15)) { copyToast = "Copied: \(label)" }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1200))
             withAnimation(.easeInOut(duration: 0.2)) { copyToast = nil }
         }
     }
