@@ -121,7 +121,7 @@ struct MenuContentView: View {
                                     .frame(maxWidth: 80, alignment: .trailing)
                                     .help(c.image)
                                     .copyable { copy(c.image) }
-                                Image(systemName: "terminal")
+                                Image(systemName: "apple.terminal")
                                     .foregroundStyle(.secondary)
                                     .font(.system(size: 8))
                                     .help("Copy: docker exec -it \(c.id) sh")
@@ -249,7 +249,7 @@ private extension View {
         self
             .contentShape(Rectangle())
             .onHover { inside in
-                if inside { NSCursor.dragCopy.push() } else { NSCursor.pop() }
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
             }
             .onTapGesture(perform: action)
     }
