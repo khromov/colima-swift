@@ -99,58 +99,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Draws a colored circle with a white "C" sized for the menu bar,
-    /// plus an optional running-container count badge to its right.
+    /// Draws a colored circle sized for the menu bar.
+    /// Shows the running-container count inside when > 0, otherwise "C".
     private static func makeStatusImage(color: NSColor, runningContainers: Int = 0) -> NSImage {
-        let circleSize: CGFloat = 18
-        let badgeText: NSAttributedString?
-        let badgeWidth: CGFloat
-
-        if runningContainers > 0 {
-            let badgeFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .semibold)
-            let badgeAttrs: [NSAttributedString.Key: Any] = [
-                .font: badgeFont,
-                .foregroundColor: NSColor.controlTextColor
-            ]
-            let bt = NSAttributedString(string: "\(runningContainers)", attributes: badgeAttrs)
-            badgeText = bt
-            badgeWidth = 2 + bt.size().width   // 2pt gap between circle and number
-        } else {
-            badgeText = nil
-            badgeWidth = 0
-        }
-
-        let size = NSSize(width: circleSize + badgeWidth, height: circleSize)
+        let size = NSSize(width: 18, height: 18)
         let image = NSImage(size: size)
         image.lockFocus()
         defer { image.unlockFocus() }
 
-        // --- Colored circle with "C" ---
-        let circleRect = NSRect(x: 0, y: 0, width: circleSize, height: circleSize).insetBy(dx: 1, dy: 1)
+        let rect = NSRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1)
         color.setFill()
-        NSBezierPath(ovalIn: circleRect).fill()
+        NSBezierPath(ovalIn: rect).fill()
 
-        let font = NSFont.systemFont(ofSize: 13, weight: .bold)
+        let label = runningContainers > 0 ? "\(runningContainers)" : "C"
+        let fontSize: CGFloat = runningContainers > 9 ? 10 : 13
+        let font = runningContainers > 0
+            ? NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .bold)
+            : NSFont.systemFont(ofSize: fontSize, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor.white
         ]
-        let cText = NSAttributedString(string: "C", attributes: attrs)
-        let textWidth = cText.size().width
-        let baselineY = (circleSize - font.capHeight) / 2
+        let text = NSAttributedString(string: label, attributes: attrs)
+        let textWidth = text.size().width
+        let baselineY = (size.height - font.capHeight) / 2
         let point = NSPoint(
-            x: (circleSize - textWidth) / 2,
+            x: (size.width - textWidth) / 2,
             y: baselineY + font.descender
         )
-        cText.draw(at: point)
-
-        // --- Badge number ---
-        if let badgeText {
-            let badgeFont = badgeText.attribute(.font, at: 0, effectiveRange: nil) as! NSFont
-            let badgeY = (circleSize - badgeFont.capHeight) / 2 + badgeFont.descender
-            badgeText.draw(at: NSPoint(x: circleSize + 2, y: badgeY))
-        }
-
+        text.draw(at: point)
         return image
     }
 }
