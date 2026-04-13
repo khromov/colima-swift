@@ -8,6 +8,7 @@ final class ColimaController: ObservableObject {
     @Published private(set) var instance: ColimaInstance?
     @Published private(set) var processMetrics: VMProcessMetrics?
     @Published private(set) var dockerStats: DockerStats?
+    @Published private(set) var containers: [DockerContainer] = []
     @Published private(set) var busy: Bool = false
     @Published var lastError: String?
     @Published var launchAtLogin: Bool = false
@@ -142,11 +143,14 @@ final class ColimaController: ObservableObject {
         if newStatus == .running {
             async let metrics = loadProcessMetrics()
             async let docker  = loadDockerStats()
+            async let ctrs    = loadContainers()
             self.processMetrics = await metrics
             self.dockerStats    = await docker
+            self.containers     = await ctrs
         } else {
             self.processMetrics = nil
             self.dockerStats = nil
+            self.containers = []
         }
     }
 
@@ -199,6 +203,20 @@ final class ColimaController: ObservableObject {
             return DockerStats(total: total, running: running)
         } catch {
             return nil
+        }
+    }
+
+    private func loadContainers() async -> [DockerContainer] {
+        guard let dockerPath else { return [] }
+        do {
+            let out = try await Shell.run(dockerPath, ["ps", "--format", "{{.Names}}\t{{.Image}}\t{{.Status}}"])
+            return out.split(whereSeparator: \.isNewline).compactMap { line in
+                let parts = line.split(separator: "\t", maxSplits: 2).map(String.init)
+                guard parts.count >= 3 else { return nil }
+                return DockerContainer(name: parts[0], image: parts[1], status: parts[2])
+            }
+        } catch {
+            return []
         }
     }
 }

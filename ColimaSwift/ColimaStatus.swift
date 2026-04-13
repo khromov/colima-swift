@@ -54,3 +54,9 @@ struct DockerStats {
     let total: Int
     let running: Int
 }
+
+struct DockerContainer {
+    let name: String
+    let image: String
+    let status: String
+}

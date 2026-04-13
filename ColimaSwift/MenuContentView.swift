@@ -62,6 +62,11 @@ struct MenuContentView: View {
             if let d = controller.dockerStats {
                 row("Containers", "\(d.running) running / \(d.total) total")
             }
+            if !controller.containers.isEmpty {
+                ForEach(controller.containers, id: \.name) { c in
+                    row(c.name, c.image)
+                }
+            }
             if controller.instance == nil && controller.processMetrics == nil {
                 Text("Start Colima to see metrics.")
                     .font(.caption)
