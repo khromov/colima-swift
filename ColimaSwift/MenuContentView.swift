@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuContentView: View {
     @EnvironmentObject var controller: ColimaController
     @State private var showSettings: Bool = false
+    @State private var showContainers: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -60,11 +61,46 @@ struct MenuContentView: View {
                 row("Host agent RSS", Self.formatBytes(m.residentBytes))
             }
             if let d = controller.dockerStats {
-                row("Containers", "\(d.running) running / \(d.total) total")
-            }
-            if !controller.containers.isEmpty {
-                ForEach(controller.containers, id: \.name) { c in
-                    row(c.name, c.image)
+                HStack {
+                    Text("Containers")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(d.running) running / \(d.total) total")
+                        .monospacedDigit()
+                    if !controller.containers.isEmpty {
+                        Image(systemName: showContainers ? "chevron.up" : "chevron.down")
+                            .foregroundStyle(.secondary)
+                            .font(.system(size: 9))
+                    }
+                }
+                .font(.system(size: 12))
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if !controller.containers.isEmpty {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            showContainers.toggle()
+                        }
+                    }
+                }
+
+                if showContainers {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(controller.containers, id: \.name) { c in
+                            HStack(spacing: 5) {
+                                Circle()
+                                    .fill(.green)
+                                    .frame(width: 6, height: 6)
+                                Text(c.name)
+                                Spacer()
+                                Text(c.image)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                        }
+                    }
+                    .font(.system(size: 10))
+                    .padding(.leading, 4)
                 }
             }
             if controller.instance == nil && controller.processMetrics == nil {
