@@ -11,6 +11,7 @@ struct LogsWindowView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
+                Button("Copy") { copyAll() }
                 Button("Clear") { store.clear() }
                 Toggle("Follow log", isOn: $followLog)
                     .toggleStyle(.checkbox)
@@ -69,6 +70,22 @@ struct LogsWindowView: View {
             Spacer(minLength: 0)
         }
         .font(.system(size: 11, design: .monospaced))
+    }
+
+    private func copyAll() {
+        let text = store.entries.map { entry in
+            let ts = Self.timeFormatter.string(from: entry.timestamp)
+            let level: String
+            switch entry.level {
+            case .info:  level = "INFO"
+            case .warn:  level = "WARN"
+            case .error: level = "ERROR"
+            }
+            return "\(ts)  \(level)  \(entry.source)  \(entry.message)"
+        }.joined(separator: "\n")
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
     }
 
     private func color(for level: LogLevel) -> Color {
