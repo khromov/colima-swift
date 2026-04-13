@@ -3,7 +3,7 @@ import SwiftUI
 struct MenuContentView: View {
     @EnvironmentObject var controller: ColimaController
     @State private var showSettings: Bool = false
-    @State private var showContainers: Bool = false
+    @AppStorage("showContainers") private var showContainers: Bool = false
     @State private var copyToast: String?
 
     var body: some View {
