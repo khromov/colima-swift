@@ -29,6 +29,8 @@ final class ColimaController: ObservableObject {
     }
 
     private var pollTask: Task<Void, Never>?
+    private var eventsWatcher: DockerEventsWatcher?
+    private var pendingEventRefresh: Task<Void, Never>?
 
     init(profile: String = "default", colimaPath: String?, dockerPath: String?) {
         self.profile = profile
@@ -60,6 +62,11 @@ final class ColimaController: ObservableObject {
 
     deinit {
         pollTask?.cancel()
+        pendingEventRefresh?.cancel()
+        // eventsWatcher.stop() is @MainActor; since deinit may run off-main
+        // we terminate the underlying process by dropping the reference —
+        // DockerEventsWatcher.stop() is also called explicitly when status
+        // changes to non-running.
     }
 
     // MARK: - Actions
@@ -113,16 +120,57 @@ final class ColimaController: ObservableObject {
         }
 
         if newStatus == .running {
-            async let metrics = loadProcessMetrics()
-            async let docker  = loadDockerStats()
-            async let ctrs    = loadContainers()
-            self.processMetrics = await metrics
-            self.dockerStats    = await docker
-            self.containers     = await ctrs
+            self.processMetrics = await loadProcessMetrics()
+            startEventsWatcherIfNeeded()
         } else {
             self.processMetrics = nil
             self.dockerStats = nil
             self.containers = []
+            stopEventsWatcher()
+        }
+    }
+
+    /// Fetches docker container stats + list. Called on watcher connect (to
+    /// seed state) and on every debounced event burst.
+    private func refreshDockerState() async {
+        async let docker = loadDockerStats()
+        async let ctrs   = loadContainers()
+        self.dockerStats = await docker
+        self.containers  = await ctrs
+    }
+
+    // MARK: - Docker events
+
+    private func startEventsWatcherIfNeeded() {
+        guard eventsWatcher == nil, let dockerPath else { return }
+        let watcher = DockerEventsWatcher(
+            dockerPath: dockerPath,
+            dockerContext: dockerContext,
+            profile: profile
+        ) { [weak self] in
+            self?.scheduleEventRefresh()
+        }
+        eventsWatcher = watcher
+        watcher.start()
+    }
+
+    private func stopEventsWatcher() {
+        eventsWatcher?.stop()
+        eventsWatcher = nil
+        pendingEventRefresh?.cancel()
+        pendingEventRefresh = nil
+    }
+
+    /// Debounce rapid event bursts (e.g. `docker compose up`) into a single
+    /// refresh. If a refresh is already pending, this is a no-op.
+    private func scheduleEventRefresh() {
+        if pendingEventRefresh != nil { return }
+        pendingEventRefresh = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
+            guard let self, !Task.isCancelled else { return }
+            self.pendingEventRefresh = nil
+            guard self.status == .running else { return }
+            await self.refreshDockerState()
         }
     }
 

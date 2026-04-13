@@ -124,6 +124,70 @@ enum Shell {
         }
     }
 
+    /// Launches a long-lived process and returns its stdout as an async stream
+    /// of lines. Stderr is forwarded to the log store. The caller owns the
+    /// returned `Process` and is responsible for calling `terminate()` when
+    /// done; the stream finishes when the process exits.
+    static func stream(_ tool: String, _ args: [String], source: String)
+        -> (process: Process, lines: AsyncThrowingStream<String, Error>)
+    {
+        let commandLine = ([tool] + args).joined(separator: " ")
+        LogStore.log(.info, source: "shell", "→ \(commandLine)")
+
+        let (process, outPipe, errPipe) = makeProcess(tool, args)
+
+        let stream = AsyncThrowingStream<String, Error> { continuation in
+            // Forward stderr to the log store so failures are visible.
+            Task.detached {
+                do {
+                    for try await line in errPipe.fileHandleForReading.bytes.lines {
+                        let trimmed = line.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+                        if !trimmed.isEmpty {
+                            LogStore.log(.error, source: source, "  │ \(trimmed)")
+                        }
+                    }
+                } catch {
+                    // Pipe closed on termination; expected.
+                }
+            }
+
+            // Read stdout line-by-line; each line becomes a stream element.
+            Task.detached {
+                do {
+                    for try await line in outPipe.fileHandleForReading.bytes.lines {
+                        continuation.yield(line)
+                    }
+                } catch {
+                    continuation.finish(throwing: error)
+                    return
+                }
+                // Stdout closed — process is exiting. Finish based on exit code.
+                process.waitUntilExit()
+                let code = process.terminationStatus
+                if code == 0 {
+                    continuation.finish()
+                } else {
+                    continuation.finish(throwing: ShellError.nonZeroExit(code: code, stderr: ""))
+                }
+            }
+
+            continuation.onTermination = { _ in
+                if process.isRunning {
+                    process.terminate()
+                }
+            }
+
+            do {
+                try process.run()
+            } catch {
+                LogStore.log(.error, source: "shell", "✗ failed to launch \(tool): \(error)")
+                continuation.finish(throwing: ShellError.launchFailed("\(error)"))
+            }
+        }
+
+        return (process, stream)
+    }
+
     private static func makeProcess(_ tool: String, _ args: [String]) -> (Process, Pipe, Pipe) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: tool)
