@@ -71,20 +71,22 @@ struct MenuContentView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            Text("Logs")
-                .foregroundStyle(.secondary)
-                .onTapGesture {
-                    openWindow(id: "logs")
-                    NSApp.activate(ignoringOtherApps: true)
-                }
-            Text("Settings")
-                .foregroundStyle(.secondary)
-                .onTapGesture { showSettings.toggle() }
+            Button("Logs") {
+                openWindow(id: "logs")
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            .keyboardShortcut("l", modifiers: .command)
+
+            Button("Settings") { showSettings.toggle() }
+                .keyboardShortcut(",", modifiers: .command)
+
             Spacer()
-            Text("Quit")
-                .foregroundStyle(.secondary)
-                .onTapGesture { NSApplication.shared.terminate(nil) }
+
+            Button("Quit") { NSApplication.shared.terminate(nil) }
+                .keyboardShortcut("q", modifiers: .command)
         }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
         .font(.system(size: 11))
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
