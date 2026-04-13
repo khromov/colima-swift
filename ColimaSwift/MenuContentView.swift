@@ -228,7 +228,8 @@ struct MenuContentView: View {
     private func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
-        withAnimation(.easeInOut(duration: 0.15)) { copyToast = "Copied!" }
+        let label = text.count > 30 ? String(text.prefix(30)) + "…" : text
+        withAnimation(.easeInOut(duration: 0.15)) { copyToast = "Copied: \(label)" }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             withAnimation(.easeInOut(duration: 0.2)) { copyToast = nil }
         }
