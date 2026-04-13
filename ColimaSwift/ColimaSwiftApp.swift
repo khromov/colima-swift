@@ -35,7 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         popover = NSPopover()
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 280, height: 320)
+        popover.contentSize = NSSize(width: 240, height: 320)
         popover.contentViewController = NSHostingController(
             rootView: MenuContentView().environmentObject(controller)
         )

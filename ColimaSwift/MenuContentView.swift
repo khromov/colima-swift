@@ -19,7 +19,7 @@ struct MenuContentView: View {
             }
         }
         .padding(10)
-        .frame(width: 270)
+        .frame(width: 230)
     }
 
     // MARK: - Header
@@ -133,7 +133,7 @@ struct MenuContentView: View {
                 get: { controller.launchAtLogin },
                 set: { controller.setLaunchAtLogin($0) }
             )) {
-                Text("Autostart")
+                Text("Start on boot")
                     .padding(.leading, 4)
             }
             .toggleStyle(.checkbox)
