@@ -93,20 +93,52 @@ final class DockerEventsWatcher {
             "--filter", "type=container",
             "--format", "{{json .}}",
         ]
+        let commandLine = ([dockerPath] + args).joined(separator: " ")
         LogStore.shared.append(.info, source: logSource, "connecting")
-        let (process, lines) = Shell.stream(dockerPath, args, source: logSource)
+        LogStore.shared.append(.info, source: "shell", "→ \(commandLine)")
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: dockerPath)
+        process.arguments = args
+
+        var env = ProcessInfo.processInfo.environment
+        let extras = Shell.searchDirs.joined(separator: ":")
+        env["PATH"] = env["PATH"].map { "\($0):\(extras)" } ?? extras
+        process.environment = env
+
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        process.standardOutput = outPipe
+        process.standardError = errPipe
+
         currentProcess = process
         defer {
             if process.isRunning { process.terminate() }
             currentProcess = nil
         }
 
+        do {
+            try process.run()
+        } catch {
+            throw ShellError.launchFailed("\(error)")
+        }
+
         // Seed the callback once on (re)connect so consumers pick up the
         // current container state even if no events ever fire.
         onContainerEvent()
 
+        let source = logSource
+        async let _: Void = {
+            for await line in AsyncLineReader(handle: errPipe.fileHandleForReading) {
+                let trimmed = line.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+                if !trimmed.isEmpty {
+                    LogStore.log(.error, source: source, "  │ \(trimmed)")
+                }
+            }
+        }()
+
         var sawFirstLine = false
-        for try await line in lines {
+        for await line in AsyncLineReader(handle: outPipe.fileHandleForReading) {
             if !sawFirstLine {
                 sawFirstLine = true
                 LogStore.shared.append(.info, source: logSource, "connected")
@@ -117,6 +149,12 @@ final class DockerEventsWatcher {
             }
             onContainerEvent()
             if Task.isCancelled { break }
+        }
+
+        process.waitUntilExit()
+        let code = process.terminationStatus
+        if code != 0 && !Task.isCancelled {
+            throw ShellError.nonZeroExit(code: code, stderr: "")
         }
     }
 

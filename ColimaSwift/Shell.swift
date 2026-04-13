@@ -124,70 +124,6 @@ enum Shell {
         }
     }
 
-    /// Launches a long-lived process and returns its stdout as an async stream
-    /// of lines. Stderr is forwarded to the log store. The caller owns the
-    /// returned `Process` and is responsible for calling `terminate()` when
-    /// done; the stream finishes when the process exits.
-    static func stream(_ tool: String, _ args: [String], source: String)
-        -> (process: Process, lines: AsyncThrowingStream<String, Error>)
-    {
-        let commandLine = ([tool] + args).joined(separator: " ")
-        LogStore.log(.info, source: "shell", "→ \(commandLine)")
-
-        let (process, outPipe, errPipe) = makeProcess(tool, args)
-
-        let stream = AsyncThrowingStream<String, Error> { continuation in
-            // Forward stderr to the log store so failures are visible.
-            Task.detached {
-                do {
-                    for try await line in errPipe.fileHandleForReading.bytes.lines {
-                        let trimmed = line.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
-                        if !trimmed.isEmpty {
-                            LogStore.log(.error, source: source, "  │ \(trimmed)")
-                        }
-                    }
-                } catch {
-                    // Pipe closed on termination; expected.
-                }
-            }
-
-            // Read stdout line-by-line; each line becomes a stream element.
-            Task.detached {
-                do {
-                    for try await line in outPipe.fileHandleForReading.bytes.lines {
-                        continuation.yield(line)
-                    }
-                } catch {
-                    continuation.finish(throwing: error)
-                    return
-                }
-                // Stdout closed — process is exiting. Finish based on exit code.
-                process.waitUntilExit()
-                let code = process.terminationStatus
-                if code == 0 {
-                    continuation.finish()
-                } else {
-                    continuation.finish(throwing: ShellError.nonZeroExit(code: code, stderr: ""))
-                }
-            }
-
-            continuation.onTermination = { _ in
-                if process.isRunning {
-                    process.terminate()
-                }
-            }
-
-            do {
-                try process.run()
-            } catch {
-                LogStore.log(.error, source: "shell", "✗ failed to launch \(tool): \(error)")
-                continuation.finish(throwing: ShellError.launchFailed("\(error)"))
-            }
-        }
-
-        return (process, stream)
-    }
-
     private static func makeProcess(_ tool: String, _ args: [String]) -> (Process, Pipe, Pipe) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: tool)
@@ -239,5 +175,68 @@ enum Shell {
         let line = s.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
         if line.count <= max { return line }
         return String(line.prefix(max)) + "…"
+    }
+}
+
+/// Reads lines from a FileHandle using `readabilityHandler` — more reliable for
+/// long-lived pipes than `FileHandle.bytes.lines`, which can stall on streams
+/// like `docker events` where lines arrive sporadically. Terminates when the
+/// pipe is closed by the writer (process exit).
+struct AsyncLineReader: AsyncSequence {
+    typealias Element = String
+    let handle: FileHandle
+
+    func makeAsyncIterator() -> AsyncStream<String>.Iterator {
+        let handle = self.handle
+        let buffer = LineBuffer()
+        let stream = AsyncStream<String> { continuation in
+            handle.readabilityHandler = { fh in
+                let chunk = fh.availableData
+                if chunk.isEmpty {
+                    if let tail = buffer.flushTail() {
+                        continuation.yield(tail)
+                    }
+                    fh.readabilityHandler = nil
+                    continuation.finish()
+                    return
+                }
+                for line in buffer.append(chunk) {
+                    continuation.yield(line)
+                }
+            }
+            continuation.onTermination = { _ in
+                handle.readabilityHandler = nil
+            }
+        }
+        return stream.makeAsyncIterator()
+    }
+}
+
+private final class LineBuffer: @unchecked Sendable {
+    private var data = Data()
+    private let lock = NSLock()
+
+    func append(_ chunk: Data) -> [String] {
+        lock.lock(); defer { lock.unlock() }
+        data.append(chunk)
+        var lines: [String] = []
+        while let nl = data.firstIndex(of: 0x0A) {
+            let lineData = data.subdata(in: 0..<nl)
+            data.removeSubrange(0...nl)
+            if let line = String(data: lineData, encoding: .utf8) {
+                lines.append(line)
+            }
+        }
+        return lines
+    }
+
+    func flushTail() -> String? {
+        lock.lock(); defer { lock.unlock() }
+        guard !data.isEmpty, let s = String(data: data, encoding: .utf8) else {
+            data.removeAll()
+            return nil
+        }
+        data.removeAll()
+        return s
     }
 }
