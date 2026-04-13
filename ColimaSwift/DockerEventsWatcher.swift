@@ -106,10 +106,14 @@ final class DockerEventsWatcher {
         onContainerEvent()
 
         var sawFirstLine = false
-        for try await _ in lines {
+        for try await line in lines {
             if !sawFirstLine {
                 sawFirstLine = true
                 LogStore.shared.append(.info, source: logSource, "connected")
+            }
+            let trimmed = line.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+            if !trimmed.isEmpty {
+                LogStore.shared.append(.info, source: logSource, "  │ \(trimmed)")
             }
             onContainerEvent()
             if Task.isCancelled { break }
