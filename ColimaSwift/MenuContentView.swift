@@ -4,23 +4,41 @@ struct MenuContentView: View {
     @EnvironmentObject var controller: ColimaController
     @State private var showSettings: Bool = false
     @State private var showContainers: Bool = false
+    @State private var copyToast: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
-            Divider()
-            metrics
-            Divider()
-            actions
-            Divider()
-            footer
-            if showSettings {
+        ZStack {
+            VStack(alignment: .leading, spacing: 8) {
+                header
                 Divider()
-                settingsPanel
+                metrics
+                Divider()
+                actions
+                Divider()
+                footer
+                if showSettings {
+                    Divider()
+                    settingsPanel
+                }
+            }
+            .padding(10)
+            .frame(width: 230)
+
+            if let toast = copyToast {
+                VStack {
+                    Spacer()
+                    Text(toast)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(.black.opacity(0.75)))
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .padding(.bottom, 8)
+                }
+                .allowsHitTesting(false)
             }
         }
-        .padding(10)
-        .frame(width: 230)
     }
 
     // MARK: - Header
@@ -94,12 +112,7 @@ struct MenuContentView: View {
                                     .lineLimit(1)
                                     .truncationMode(.tail)
                                     .help(c.name)
-                                    .onTapGesture { Self.copyToClipboard(c.name) }
-                                Image(systemName: "terminal")
-                                    .foregroundStyle(.secondary)
-                                    .font(.system(size: 8))
-                                    .help("Copy docker exec command")
-                                    .onTapGesture { Self.copyToClipboard("docker exec -it \(c.id) sh") }
+                                    .copyable { copy(c.name) }
                                 Spacer(minLength: 2)
                                 Text(c.image)
                                     .foregroundStyle(.secondary)
@@ -107,7 +120,12 @@ struct MenuContentView: View {
                                     .truncationMode(.middle)
                                     .frame(maxWidth: 80, alignment: .trailing)
                                     .help(c.image)
-                                    .onTapGesture { Self.copyToClipboard(c.image) }
+                                    .copyable { copy(c.image) }
+                                Image(systemName: "terminal")
+                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 8))
+                                    .help("Copy: docker exec -it \(c.id) sh")
+                                    .copyable { copy("docker exec -it \(c.id) sh") }
                             }
                         }
                     }
@@ -207,9 +225,13 @@ struct MenuContentView: View {
 
     // MARK: - Helpers
 
-    private static func copyToClipboard(_ text: String) {
+    private func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+        withAnimation(.easeInOut(duration: 0.15)) { copyToast = "Copied!" }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation(.easeInOut(duration: 0.2)) { copyToast = nil }
+        }
     }
 
     private static func formatBytes(_ bytes: Int64) -> String {
@@ -217,5 +239,17 @@ struct MenuContentView: View {
         f.allowedUnits = [.useGB, .useMB, .useKB]
         f.countStyle = .binary
         return f.string(fromByteCount: bytes)
+    }
+}
+
+private extension View {
+    /// Makes an element look and behave as a clickable copy target.
+    func copyable(action: @escaping () -> Void) -> some View {
+        self
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.dragCopy.push() } else { NSCursor.pop() }
+            }
+            .onTapGesture(perform: action)
     }
 }
