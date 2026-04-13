@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ColimaSwift is a macOS menu bar app (LSUIElement) that controls and monitors a local [Colima](https://github.com/abiosoft/colima) VM. It shells out to the `colima`, `docker`, and `ps` CLIs to read status and drive start/stop/restart actions, then renders the result in a SwiftUI popover.
 
-Targets arm64 macOS 13+. Built with `xcrun swiftc` from a Makefile — there is no `.xcodeproj` or `Package.swift`.
+Targets arm64 macOS 26+. Built with SwiftPM (`Package.swift`) via a Makefile wrapper that assembles the SwiftPM-produced executable into a `.app` bundle. There is no `.xcodeproj`.
+
+Dependencies: [swift-subprocess](https://github.com/swiftlang/swift-subprocess) for subprocess management (streaming stdout/stderr as async sequences, replaces `FileHandle.bytes.lines` which stalled on long-lived pipes).
 
 ## Build & run
 
@@ -27,7 +29,7 @@ The Swift sources in `ColimaSwift/` form a tight SwiftUI + Combine pipeline:
 - **ColimaController.swift** — The single source of truth. An `ObservableObject` that runs a 5-second polling loop, executes shell commands, parses their output into `ColimaStatus` models, and exposes start/stop/restart actions. All UI state flows from here.
 - **MenuContentView.swift** — SwiftUI view bound to the controller. Renders status, VM/container metrics, action buttons, and error messages.
 - **ColimaStatus.swift** — Plain models/enums for instance state, VM metrics, and Docker container counts.
-- **Shell.swift** — Thin `Process` wrapper. Always invokes tools by **absolute path** (`/opt/homebrew/bin/colima`, `/opt/homebrew/bin/docker`, `/bin/ps`) because the app launches without a login shell `PATH`.
+- **Shell.swift** — Thin `Subprocess` wrapper. Always invokes tools by **absolute path** (`/opt/homebrew/bin/colima`, `/opt/homebrew/bin/docker`, `/bin/ps`) because the app launches without a login shell `PATH`. Exposes `Shell.subprocessEnvironment` for other call sites (e.g. DockerEventsWatcher) that drive `Subprocess.run` directly.
 - **LogStore.swift** — Singleton (`LogStore.shared`) that buffers up to 1 000 timestamped log entries. Non-isolated callers use the static `LogStore.log()` bridge.
 - **LogsWindowView.swift** — A separate window that displays the log buffer with auto-follow and a clear button.
 

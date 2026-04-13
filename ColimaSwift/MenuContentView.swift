@@ -171,9 +171,9 @@ private struct ProfileCardView: View {
     private var metrics: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let inst = controller.instance {
-                row("CPUs",   "\(inst.cpus)")
+                row("CPUs", "\(inst.cpus)")
                 row("Memory", formatBytes(inst.memory))
-                row("Disk",   formatBytes(inst.disk))
+                row("Disk", formatBytes(inst.disk))
             }
             if let m = controller.processMetrics {
                 row("Host agent CPU", String(format: "%.1f %%", m.cpuPercent))

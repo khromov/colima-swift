@@ -24,8 +24,7 @@ final class DockerEventsWatcher {
     init(dockerPath: String,
          dockerContext: String,
          profile: String,
-         onContainerEvent: @MainActor @escaping () -> Void)
-    {
+         onContainerEvent: @MainActor @escaping () -> Void) {
         self.dockerPath = dockerPath
         self.dockerContext = dockerContext
         self.profile = profile
@@ -87,7 +86,7 @@ final class DockerEventsWatcher {
             "--context", dockerContext,
             "events",
             "--filter", "type=container",
-            "--format", "{{json .}}",
+            "--format", "{{json .}}"
         ]
         let commandLine = ([dockerPath] + args).joined(separator: " ")
         LogStore.shared.append(.info, source: logSource, "connecting")

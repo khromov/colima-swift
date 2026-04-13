@@ -64,8 +64,8 @@ final class ColimaController {
 
     // MARK: - Actions
 
-    func start()   { perform(action: "start",   transient: .starting) }
-    func stop()    { perform(action: "stop",    transient: .stopping) }
+    func start() { perform(action: "start", transient: .starting) }
+    func stop() { perform(action: "stop", transient: .stopping) }
     func restart() { perform(action: "restart", transient: .starting) }
 
     private func perform(action: String, transient: ColimaStatus) {
@@ -136,7 +136,7 @@ final class ColimaController {
             let out = try await Shell.run(dockerPath, [
                 "--context", dockerContext,
                 "ps", "-a",
-                "--format", "{{.State}}\t{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}",
+                "--format", "{{.State}}\t{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}"
             ])
 
             var total = 0

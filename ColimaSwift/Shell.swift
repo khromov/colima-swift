@@ -18,7 +18,7 @@ enum Shell {
             "/usr/local/bin",           // Homebrew (Intel) / manual installs
             "/opt/local/bin",           // MacPorts
             nix,                        // Nix single-user profile
-            "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+            "/usr/bin", "/bin", "/usr/sbin", "/sbin"
         ]
     }()
 
