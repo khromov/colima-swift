@@ -20,10 +20,6 @@ enum Shell {
         ]
     }()
 
-    /// Locates an executable by name via `/usr/bin/which`, giving it a `PATH`
-    /// that unions the inherited environment with `searchDirs` (so the lookup
-    /// works even when the app was launched with an empty PATH from Finder).
-    /// Returns an absolute path, or nil if `which` couldn't find it.
     static func resolveTool(_ name: String) -> String? {
         let which = Process()
         which.executableURL = URL(fileURLWithPath: "/usr/bin/which")
