@@ -1,4 +1,6 @@
 import Foundation
+import Subprocess
+import System
 
 /// Subscribes to `docker events` for a given colima profile and invokes a
 /// callback whenever a container event occurs. Reconnects automatically with
@@ -12,7 +14,6 @@ final class DockerEventsWatcher {
     private let onContainerEvent: @MainActor () -> Void
 
     private var runTask: Task<Void, Never>?
-    private var currentProcess: Process?
 
     /// `true` once `start()` has been called; `stop()` clears it and aborts
     /// any pending reconnect.
@@ -46,10 +47,6 @@ final class DockerEventsWatcher {
         LogStore.shared.append(.info, source: logSource, "stopped")
         runTask?.cancel()
         runTask = nil
-        if let p = currentProcess, p.isRunning {
-            p.terminate()
-        }
-        currentProcess = nil
     }
 
     // MARK: - Private
@@ -60,9 +57,8 @@ final class DockerEventsWatcher {
             let connectedAt = Date()
             do {
                 try await runOnce()
-                // Stream ended cleanly (non-error). Fall through to backoff
-                // because `docker events` is expected to be long-lived —
-                // clean exit usually means the daemon went away.
+            } catch is CancellationError {
+                break
             } catch {
                 LogStore.shared.append(.error, source: logSource,
                                        "stream error: \(error)")
@@ -97,63 +93,51 @@ final class DockerEventsWatcher {
         LogStore.shared.append(.info, source: logSource, "connecting")
         LogStore.shared.append(.info, source: "shell", "→ \(commandLine)")
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: dockerPath)
-        process.arguments = args
-
-        var env = ProcessInfo.processInfo.environment
-        let extras = Shell.searchDirs.joined(separator: ":")
-        env["PATH"] = env["PATH"].map { "\($0):\(extras)" } ?? extras
-        process.environment = env
-
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = errPipe
-
-        currentProcess = process
-        defer {
-            if process.isRunning { process.terminate() }
-            currentProcess = nil
-        }
-
-        do {
-            try process.run()
-        } catch {
-            throw ShellError.launchFailed("\(error)")
-        }
+        let source = logSource
+        let onEvent = onContainerEvent
 
         // Seed the callback once on (re)connect so consumers pick up the
         // current container state even if no events ever fire.
-        onContainerEvent()
+        onEvent()
 
-        let source = logSource
-        async let _: Void = {
-            for await line in AsyncLineReader(handle: errPipe.fileHandleForReading) {
-                let trimmed = line.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
-                if !trimmed.isEmpty {
-                    LogStore.log(.error, source: source, "  │ \(trimmed)")
+        // `preferredBufferSize: 256` is a workaround for swift-subprocess 0.4.0
+        // on Darwin: its DispatchIO-backed reader only resumes the async
+        // continuation when the full `length` has been read (see
+        // AsyncIO+Dispatch.swift). With the default ~16KB buffer, a
+        // low-volume stream like `docker events` never fills the buffer and
+        // lines never arrive. A small buffer size forces promptly-delivered
+        // chunks; `lines()` reassembles them across reads.
+        let outcome = try await Subprocess.run(
+            .path(FilePath(dockerPath)),
+            arguments: Arguments(args),
+            environment: Shell.subprocessEnvironment,
+            preferredBufferSize: 256
+        ) { _, _, outputSequence, errorSequence in
+            async let _: Void = Shell.streamLines(errorSequence, source: source)
+
+            var sawFirstLine = false
+            for try await line in outputSequence.lines(encoding: UTF8.self) {
+                if !sawFirstLine {
+                    sawFirstLine = true
+                    await MainActor.run {
+                        LogStore.shared.append(.info, source: source, "connected")
+                    }
                 }
+                let trimmed = line.trimmingCharacters(in: CharacterSet(charactersIn: "\r\n"))
+                if !trimmed.isEmpty {
+                    await MainActor.run {
+                        LogStore.shared.append(.info, source: source, "  │ \(trimmed)")
+                    }
+                }
+                await MainActor.run {
+                    onEvent()
+                }
+                if Task.isCancelled { break }
             }
-        }()
-
-        var sawFirstLine = false
-        for await line in AsyncLineReader(handle: outPipe.fileHandleForReading) {
-            if !sawFirstLine {
-                sawFirstLine = true
-                LogStore.shared.append(.info, source: logSource, "connected")
-            }
-            let trimmed = line.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
-            if !trimmed.isEmpty {
-                LogStore.shared.append(.info, source: logSource, "  │ \(trimmed)")
-            }
-            onContainerEvent()
-            if Task.isCancelled { break }
         }
 
-        process.waitUntilExit()
-        let code = process.terminationStatus
-        if code != 0 && !Task.isCancelled {
+        let code = Shell.exitCode(outcome.terminationStatus)
+        if !outcome.terminationStatus.isSuccess && !Task.isCancelled {
             throw ShellError.nonZeroExit(code: code, stderr: "")
         }
     }
