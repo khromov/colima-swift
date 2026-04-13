@@ -23,9 +23,9 @@ final class ColimaController: ObservableObject {
     }
 
     /// The Lima directory name for this profile.
-    /// Default profile uses "default"; others use "colima-<name>".
+    /// Default profile uses "colima"; others use "colima-<name>".
     private var limaInstance: String {
-        profile == "default" ? "default" : "colima-\(profile)"
+        profile == "default" ? "colima" : "colima-\(profile)"
     }
 
     private var pollTask: Task<Void, Never>?
