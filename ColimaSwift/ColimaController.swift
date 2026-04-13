@@ -130,13 +130,45 @@ final class ColimaController: ObservableObject {
         }
     }
 
-    /// Fetches docker container stats + list. Called on watcher connect (to
-    /// seed state) and on every debounced event burst.
+    /// Fetches docker container stats + list in a single `docker ps -a` call.
+    /// Called on watcher connect (to seed state) and on every debounced event
+    /// burst.
     private func refreshDockerState() async {
-        async let docker = loadDockerStats()
-        async let ctrs   = loadContainers()
-        self.dockerStats = await docker
-        self.containers  = await ctrs
+        guard let dockerPath else {
+            self.dockerStats = nil
+            self.containers = []
+            return
+        }
+        do {
+            let out = try await Shell.run(dockerPath, [
+                "--context", dockerContext,
+                "ps", "-a",
+                "--format", "{{.State}}\t{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}",
+            ])
+
+            var total = 0
+            var running = 0
+            var runningContainers: [DockerContainer] = []
+
+            for line in out.split(whereSeparator: \.isNewline) {
+                let parts = line.split(separator: "\t", maxSplits: 4).map(String.init)
+                guard parts.count >= 5 else { continue }
+                total += 1
+                let state = parts[0]
+                if state == "running" {
+                    running += 1
+                    runningContainers.append(
+                        DockerContainer(id: parts[1], name: parts[2], image: parts[3], status: parts[4])
+                    )
+                }
+            }
+
+            self.dockerStats = DockerStats(total: total, running: running)
+            self.containers = runningContainers
+        } catch {
+            self.dockerStats = nil
+            self.containers = []
+        }
     }
 
     // MARK: - Docker events
@@ -211,30 +243,4 @@ final class ColimaController: ObservableObject {
         }
     }
 
-    private func loadDockerStats() async -> DockerStats? {
-        guard let dockerPath else { return nil }
-        do {
-            let out = try await Shell.run(dockerPath, ["--context", dockerContext, "ps", "-a", "--format", "{{.State}}"])
-            let lines = out.split(whereSeparator: \.isNewline).map(String.init)
-            let total = lines.count
-            let running = lines.filter { $0 == "running" }.count
-            return DockerStats(total: total, running: running)
-        } catch {
-            return nil
-        }
-    }
-
-    private func loadContainers() async -> [DockerContainer] {
-        guard let dockerPath else { return [] }
-        do {
-            let out = try await Shell.run(dockerPath, ["--context", dockerContext, "ps", "--format", "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}"])
-            return out.split(whereSeparator: \.isNewline).compactMap { line in
-                let parts = line.split(separator: "\t", maxSplits: 3).map(String.init)
-                guard parts.count >= 4 else { return nil }
-                return DockerContainer(id: parts[0], name: parts[1], image: parts[2], status: parts[3])
-            }
-        } catch {
-            return []
-        }
-    }
 }
