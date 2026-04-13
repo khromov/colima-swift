@@ -35,6 +35,7 @@ struct MenuContentView: View {
                 }
 
                 Divider()
+                    .padding(.top, 4)
                 footer
                 if showSettings {
                     Divider()
@@ -144,6 +145,7 @@ private struct ProfileCardView: View {
                 Divider()
                 metrics
                 Divider()
+                    .padding(.bottom, 4)
                 actions
             }
         }
