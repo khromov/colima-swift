@@ -80,7 +80,7 @@ final class DockerEventsWatcher {
             attempt += 1
             LogStore.shared.append(.info, source: logSource,
                                    String(format: "reconnecting in %.1fs (attempt %d)", delay, attempt))
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            try? await Task.sleep(for: .seconds(delay))
         }
     }
 

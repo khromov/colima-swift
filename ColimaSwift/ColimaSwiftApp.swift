@@ -1,100 +1,32 @@
 import SwiftUI
 import AppKit
-import Combine
 
 @main
 struct ColimaSwiftApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var manager = ProfileManager()
 
     var body: some Scene {
-        // No window scenes — the menu bar item is owned by AppDelegate.
-        // The Settings scene gives SwiftUI a valid Scene without showing UI.
-        Settings { EmptyView() }
+        MenuBarExtra {
+            MenuContentView()
+                .environment(manager)
+                .task { await manager.refreshAll() }
+        } label: {
+            Image(nsImage: StatusIcon.image(
+                color: StatusIcon.nsColor(for: manager.aggregateStatus),
+                runningContainers: manager.totalRunningContainers
+            ))
+        }
+        .menuBarExtraStyle(.window)
+
+        Window("Colima Logs", id: "logs") {
+            LogsWindowView()
+        }
+        .windowResizability(.contentSize)
     }
 }
 
-@MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    static weak var shared: AppDelegate?
-
-    private var manager: ProfileManager!
-    private var statusItem: NSStatusItem!
-    private var popover: NSPopover!
-    private var cancellable: AnyCancellable?
-    private var logsWindow: NSWindow?
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        AppDelegate.shared = self
-        manager = ProfileManager()
-
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem.button {
-            button.action = #selector(togglePopover(_:))
-            button.target = self
-        }
-
-        popover = NSPopover()
-        popover.behavior = .transient
-        popover.contentSize = NSSize(width: 240, height: 320)
-        popover.contentViewController = NSHostingController(
-            rootView: MenuContentView().environmentObject(manager)
-        )
-
-        renderIcon(for: manager.aggregateStatus)
-        cancellable = manager.objectWillChange.sink { [weak self] _ in
-            // objectWillChange fires before the property updates; hop a tick.
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.renderIcon(for: self.manager.aggregateStatus)
-            }
-        }
-    }
-
-    func showLogsWindow() {
-        if logsWindow == nil {
-            let host = NSHostingController(rootView: LogsWindowView())
-            let win = NSWindow(contentViewController: host)
-            win.title = "Colima Logs"
-            win.setContentSize(NSSize(width: 640, height: 400))
-            win.styleMask = [.titled, .closable, .resizable, .miniaturizable]
-            win.isReleasedWhenClosed = false
-            win.center()
-            logsWindow = win
-        }
-        // LSUIElement apps don't auto-focus their windows; activate explicitly.
-        NSApp.activate(ignoringOtherApps: true)
-        logsWindow?.makeKeyAndOrderFront(nil)
-    }
-
-    @objc private func togglePopover(_ sender: AnyObject?) {
-        guard let button = statusItem.button else { return }
-        if popover.isShown {
-            popover.performClose(sender)
-        } else {
-            Task { await manager.refreshAll() }
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
-        }
-    }
-
-    private func renderIcon(for status: ColimaStatus) {
-        guard let button = statusItem.button else { return }
-        let running = manager.totalRunningContainers
-        let image = Self.makeStatusImage(color: Self.nsColor(for: status), runningContainers: running)
-        image.isTemplate = false
-        button.image = image
-
-        let profileSummary = manager.controllers.map { "\($0.profile): \($0.status.label)" }.joined(separator: ", ")
-        if profileSummary.isEmpty {
-            button.toolTip = "Colima — No profiles"
-        } else if running > 0 {
-            button.toolTip = "Colima — \(profileSummary) (\(running) container\(running == 1 ? "" : "s"))"
-        } else {
-            button.toolTip = "Colima — \(profileSummary)"
-        }
-    }
-
-    private static func nsColor(for status: ColimaStatus) -> NSColor {
+enum StatusIcon {
+    static func nsColor(for status: ColimaStatus) -> NSColor {
         switch status {
         case .running:  return .systemGreen
         case .starting, .stopping: return .systemYellow
@@ -105,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Draws a colored circle with a white "C" sized for the menu bar.
     /// When `runningContainers > 0`, draws a tiny count badge in the bottom-right corner.
-    private static func makeStatusImage(color: NSColor, runningContainers: Int = 0) -> NSImage {
+    static func image(color: NSColor, runningContainers: Int = 0) -> NSImage {
         let size = NSSize(width: 18, height: 18)
         let image = NSImage(size: size)
         image.lockFocus()
@@ -115,7 +47,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         color.setFill()
         NSBezierPath(ovalIn: rect).fill()
 
-        // "C" label centered in the circle
         let font = NSFont.systemFont(ofSize: 13, weight: .bold)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -130,7 +61,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         text.draw(at: point)
 
-        // Badge in bottom-right corner
         if runningContainers > 0 {
             let badgeFont = NSFont.monospacedDigitSystemFont(ofSize: 6, weight: .bold)
             let badgeAttrs: [NSAttributedString.Key: Any] = [

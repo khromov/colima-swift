@@ -1,27 +1,27 @@
-import Combine
 import Foundation
+import Observation
 import ServiceManagement
 import SwiftUI
 
 @MainActor
-final class ProfileManager: ObservableObject {
-    @Published private(set) var controllers: [ColimaController] = []
-    @Published var selectedProfile: String? = "default"
-    @Published var launchAtLogin: Bool = false
-    @Published var pollIntervalSeconds: Int = 5 {
+@Observable
+final class ProfileManager {
+    private(set) var controllers: [ColimaController] = []
+    var selectedProfile: String? = "default"
+    var launchAtLogin: Bool = false
+    var pollIntervalSeconds: Int = 5 {
         didSet {
             UserDefaults.standard.set(pollIntervalSeconds, forKey: pollIntervalDefaultsKey)
             restartAllPolling()
         }
     }
-    @Published var lastError: String?
+    var lastError: String?
 
     let colimaPath: String?
     let dockerPath: String?
 
     private let pollIntervalDefaultsKey = "pollIntervalSeconds"
-    private var discoveryTask: Task<Void, Never>?
-    private var childCancellables: [String: AnyCancellable] = [:]
+    @ObservationIgnored private var discoveryTask: Task<Void, Never>?
 
     init() {
         let resolvedColima = Shell.resolveTool("colima")
@@ -51,15 +51,11 @@ final class ProfileManager: ObservableObject {
             guard let self else { return }
             await self.discoverProfiles()
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10s
+                try? await Task.sleep(for: .seconds(10))
                 if Task.isCancelled { break }
                 await self.discoverProfiles()
             }
         }
-    }
-
-    deinit {
-        discoveryTask?.cancel()
     }
 
     // MARK: - Aggregate status for menu bar icon
@@ -91,24 +87,19 @@ final class ProfileManager: ObservableObject {
             let existingNames = Set(controllers.map(\.profile))
             let discoveredNames = Set(names)
 
-            // Add new controllers
             for name in names where !existingNames.contains(name) {
                 let controller = ColimaController(profile: name, colimaPath: colimaPath, dockerPath: dockerPath)
                 controllers.append(controller)
-                subscribeToChild(controller)
                 controller.startPolling { [weak self] in self?.pollIntervalSeconds ?? 5 }
                 LogStore.shared.append(.info, source: "app", "Discovered profile: \(name)")
             }
 
-            // Remove stale controllers
             for controller in controllers where !discoveredNames.contains(controller.profile) {
                 controller.stopPolling()
-                childCancellables.removeValue(forKey: controller.profile)
                 LogStore.shared.append(.info, source: "app", "Removed profile: \(controller.profile)")
             }
             controllers.removeAll { !discoveredNames.contains($0.profile) }
 
-            // Keep stable ordering: sort by name, with "default" always first
             controllers.sort { a, b in
                 if a.profile == "default" { return true }
                 if b.profile == "default" { return false }
@@ -150,12 +141,6 @@ final class ProfileManager: ObservableObject {
     }
 
     // MARK: - Private
-
-    private func subscribeToChild(_ controller: ColimaController) {
-        childCancellables[controller.profile] = controller.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
-        }
-    }
 
     private func restartAllPolling() {
         for controller in controllers {

@@ -1,5 +1,5 @@
 import Foundation
-import SwiftUI
+import Observation
 
 enum LogLevel {
     case info, warn, error
@@ -14,10 +14,11 @@ struct LogEntry: Identifiable {
 }
 
 @MainActor
-final class LogStore: ObservableObject {
+@Observable
+final class LogStore {
     static let shared = LogStore()
 
-    @Published private(set) var entries: [LogEntry] = []
+    private(set) var entries: [LogEntry] = []
     private let cap = 1000
 
     func append(_ level: LogLevel, source: String, _ message: String) {
@@ -31,7 +32,6 @@ final class LogStore: ObservableObject {
         entries.removeAll()
     }
 
-    /// Bridge for non-isolated callers (e.g. Process termination handlers on background threads).
     nonisolated static func log(_ level: LogLevel, source: String, _ message: String) {
         Task { @MainActor in
             LogStore.shared.append(level, source: source, message)

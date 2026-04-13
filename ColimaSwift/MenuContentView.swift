@@ -1,11 +1,13 @@
 import SwiftUI
 
 struct MenuContentView: View {
-    @EnvironmentObject var manager: ProfileManager
+    @Environment(ProfileManager.self) private var manager
+    @Environment(\.openWindow) private var openWindow
     @State private var showSettings: Bool = false
     @State private var copyToast: String?
 
     var body: some View {
+        @Bindable var manager = manager
         ZStack {
             VStack(alignment: .leading, spacing: 0) {
                 if manager.controllers.isEmpty {
@@ -39,6 +41,7 @@ struct MenuContentView: View {
                 footer
                 if showSettings {
                     Divider()
+                        .padding(.top, 6)
                     settingsPanel
                 }
             }
@@ -68,7 +71,10 @@ struct MenuContentView: View {
         HStack(spacing: 12) {
             Text("Logs")
                 .foregroundStyle(.secondary)
-                .onTapGesture { AppDelegate.shared?.showLogsWindow() }
+                .onTapGesture {
+                    openWindow(id: "logs")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
             Text("Settings")
                 .foregroundStyle(.secondary)
                 .onTapGesture { showSettings.toggle() }
@@ -85,7 +91,8 @@ struct MenuContentView: View {
     // MARK: - Settings Panel
 
     private var settingsPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        @Bindable var manager = manager
+        return VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: Binding(
                 get: { manager.launchAtLogin },
                 set: { manager.setLaunchAtLogin($0) }
@@ -107,13 +114,14 @@ struct MenuContentView: View {
         }
         .font(.system(size: 11))
         .padding(.horizontal, 6)
+        .padding(.vertical, 8)
     }
 }
 
 // MARK: - Profile Card
 
 private struct ProfileCardView: View {
-    @ObservedObject var controller: ColimaController
+    let controller: ColimaController
     let isExpanded: Bool
     @Binding var copyToast: String?
     @AppStorage("showContainers") private var showContainers: Bool = false

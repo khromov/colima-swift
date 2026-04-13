@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct LogsWindowView: View {
-    @ObservedObject private var store = LogStore.shared
+    private let store = LogStore.shared
     @State private var followLog: Bool = true
 
     var body: some View {
@@ -35,15 +35,13 @@ struct LogsWindowView: View {
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .onChange(of: store.entries.count) { _ in
+                .onChange(of: store.entries.count) {
                     guard followLog else { return }
-                    // Defer one runloop tick so the new row is laid out before we
-                    // ask the proxy to scroll to the sentinel past it.
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         proxy.scrollTo(Self.bottomID, anchor: .bottom)
                     }
                 }
-                .onChange(of: followLog) { newValue in
+                .onChange(of: followLog) { _, newValue in
                     if newValue {
                         proxy.scrollTo(Self.bottomID, anchor: .bottom)
                     }

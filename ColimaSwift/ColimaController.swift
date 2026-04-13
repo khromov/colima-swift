@@ -1,15 +1,17 @@
 import Foundation
+import Observation
 import SwiftUI
 
 @MainActor
-final class ColimaController: ObservableObject {
-    @Published private(set) var status: ColimaStatus = .unknown
-    @Published private(set) var instance: ColimaInstance?
-    @Published private(set) var processMetrics: VMProcessMetrics?
-    @Published private(set) var dockerStats: DockerStats?
-    @Published private(set) var containers: [DockerContainer] = []
-    @Published private(set) var busy: Bool = false
-    @Published var lastError: String?
+@Observable
+final class ColimaController {
+    private(set) var status: ColimaStatus = .unknown
+    private(set) var instance: ColimaInstance?
+    private(set) var processMetrics: VMProcessMetrics?
+    private(set) var dockerStats: DockerStats?
+    private(set) var containers: [DockerContainer] = []
+    private(set) var busy: Bool = false
+    var lastError: String?
 
     let profile: String
     let colimaPath: String?
@@ -46,7 +48,7 @@ final class ColimaController: ObservableObject {
             await self.refresh()
             while !Task.isCancelled {
                 let seconds = max(1, intervalProvider())
-                try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+                try? await Task.sleep(for: .seconds(seconds))
                 if Task.isCancelled { break }
                 if !self.busy {
                     await self.refresh()
@@ -58,15 +60,6 @@ final class ColimaController: ObservableObject {
     func stopPolling() {
         pollTask?.cancel()
         pollTask = nil
-    }
-
-    deinit {
-        pollTask?.cancel()
-        pendingEventRefresh?.cancel()
-        // eventsWatcher.stop() is @MainActor; since deinit may run off-main
-        // we terminate the underlying process by dropping the reference —
-        // DockerEventsWatcher.stop() is also called explicitly when status
-        // changes to non-running.
     }
 
     // MARK: - Actions
@@ -198,7 +191,7 @@ final class ColimaController: ObservableObject {
     private func scheduleEventRefresh() {
         if pendingEventRefresh != nil { return }
         pendingEventRefresh = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
+            try? await Task.sleep(for: .milliseconds(200))
             guard let self, !Task.isCancelled else { return }
             self.pendingEventRefresh = nil
             guard self.status == .running else { return }
