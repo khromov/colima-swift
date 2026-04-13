@@ -17,7 +17,7 @@ struct ColimaSwiftApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
 
-    private var controller: ColimaController!
+    private var manager: ProfileManager!
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var cancellable: AnyCancellable?
@@ -25,7 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
-        controller = ColimaController()
+        manager = ProfileManager()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
@@ -37,15 +37,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 240, height: 320)
         popover.contentViewController = NSHostingController(
-            rootView: MenuContentView().environmentObject(controller)
+            rootView: MenuContentView().environmentObject(manager)
         )
 
-        renderIcon(for: controller.status)
-        cancellable = controller.objectWillChange.sink { [weak self] _ in
+        renderIcon(for: manager.aggregateStatus)
+        cancellable = manager.objectWillChange.sink { [weak self] _ in
             // objectWillChange fires before the property updates; hop a tick.
             DispatchQueue.main.async {
                 guard let self else { return }
-                self.renderIcon(for: self.controller.status)
+                self.renderIcon(for: self.manager.aggregateStatus)
             }
         }
     }
@@ -71,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             popover.performClose(sender)
         } else {
-            Task { await controller.refresh() }
+            Task { await manager.refreshAll() }
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
@@ -79,14 +79,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func renderIcon(for status: ColimaStatus) {
         guard let button = statusItem.button else { return }
-        let running = controller.dockerStats?.running ?? 0
+        let running = manager.totalRunningContainers
         let image = Self.makeStatusImage(color: Self.nsColor(for: status), runningContainers: running)
         image.isTemplate = false
         button.image = image
-        if running > 0 {
-            button.toolTip = "Colima — \(status.label) (\(running) container\(running == 1 ? "" : "s"))"
+
+        let profileSummary = manager.controllers.map { "\($0.profile): \($0.status.label)" }.joined(separator: ", ")
+        if profileSummary.isEmpty {
+            button.toolTip = "Colima — No profiles"
+        } else if running > 0 {
+            button.toolTip = "Colima — \(profileSummary) (\(running) container\(running == 1 ? "" : "s"))"
         } else {
-            button.toolTip = "Colima — \(status.label)"
+            button.toolTip = "Colima — \(profileSummary)"
         }
     }
 
