@@ -12,11 +12,12 @@ Targets arm64 macOS 13+. Built with `xcrun swiftc` from a Makefile — there is 
 
 ```bash
 make          # Compile ColimaSwift.app into build/
-make run      # Build and launch the app
+make run      # Build and launch the app (kills any running instance first)
 make clean    # Remove build/
+make release  # Sign with Developer ID, notarize, staple, zip (requires DEVELOPER_ID and NOTARY_PROFILE)
 ```
 
-There is no test target.
+There is no test target. Pushing a `v*` tag triggers the `.github/workflows/release.yml` CI workflow which builds, signs, notarizes, and creates a GitHub Release.
 
 ## Architecture
 
@@ -27,6 +28,8 @@ The Swift sources in `ColimaSwift/` form a tight SwiftUI + Combine pipeline:
 - **MenuContentView.swift** — SwiftUI view bound to the controller. Renders status, VM/container metrics, action buttons, and error messages.
 - **ColimaStatus.swift** — Plain models/enums for instance state, VM metrics, and Docker container counts.
 - **Shell.swift** — Thin `Process` wrapper. Always invokes tools by **absolute path** (`/opt/homebrew/bin/colima`, `/opt/homebrew/bin/docker`, `/bin/ps`) because the app launches without a login shell `PATH`.
+- **LogStore.swift** — Singleton (`LogStore.shared`) that buffers up to 1 000 timestamped log entries. Non-isolated callers use the static `LogStore.log()` bridge.
+- **LogsWindowView.swift** — A separate window that displays the log buffer with auto-follow and a clear button.
 
 ### How the data flows
 1. Controller's timer fires → runs `colima list --json` (one JSON object per line, filter for the `default` profile).
