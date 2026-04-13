@@ -56,6 +56,7 @@ struct DockerStats {
 }
 
 struct DockerContainer {
+    let id: String
     let name: String
     let image: String
     let status: String

@@ -209,11 +209,11 @@ final class ColimaController: ObservableObject {
     private func loadContainers() async -> [DockerContainer] {
         guard let dockerPath else { return [] }
         do {
-            let out = try await Shell.run(dockerPath, ["ps", "--format", "{{.Names}}\t{{.Image}}\t{{.Status}}"])
+            let out = try await Shell.run(dockerPath, ["ps", "--format", "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}"])
             return out.split(whereSeparator: \.isNewline).compactMap { line in
-                let parts = line.split(separator: "\t", maxSplits: 2).map(String.init)
-                guard parts.count >= 3 else { return nil }
-                return DockerContainer(name: parts[0], image: parts[1], status: parts[2])
+                let parts = line.split(separator: "\t", maxSplits: 3).map(String.init)
+                guard parts.count >= 4 else { return nil }
+                return DockerContainer(id: parts[0], name: parts[1], image: parts[2], status: parts[3])
             }
         } catch {
             return []
