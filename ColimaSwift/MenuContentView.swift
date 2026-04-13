@@ -85,17 +85,29 @@ struct MenuContentView: View {
 
                 if showContainers {
                     VStack(alignment: .leading, spacing: 3) {
-                        ForEach(controller.containers, id: \.name) { c in
-                            HStack(spacing: 5) {
+                        ForEach(controller.containers, id: \.id) { c in
+                            HStack(spacing: 4) {
                                 Circle()
                                     .fill(.green)
                                     .frame(width: 6, height: 6)
                                 Text(c.name)
-                                Spacer()
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .help(c.name)
+                                    .onTapGesture { Self.copyToClipboard(c.name) }
+                                Image(systemName: "terminal")
+                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 8))
+                                    .help("Copy docker exec command")
+                                    .onTapGesture { Self.copyToClipboard("docker exec -it \(c.id) sh") }
+                                Spacer(minLength: 2)
                                 Text(c.image)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
+                                    .frame(maxWidth: 80, alignment: .trailing)
+                                    .help(c.image)
+                                    .onTapGesture { Self.copyToClipboard(c.image) }
                             }
                         }
                     }
@@ -194,6 +206,11 @@ struct MenuContentView: View {
     }
 
     // MARK: - Helpers
+
+    private static func copyToClipboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
 
     private static func formatBytes(_ bytes: Int64) -> String {
         let f = ByteCountFormatter()
