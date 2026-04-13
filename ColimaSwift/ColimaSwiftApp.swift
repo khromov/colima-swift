@@ -128,24 +128,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Badge in bottom-right corner
         if runningContainers > 0 {
-            let badgeFont = NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .bold)
+            let badgeFont = NSFont.monospacedDigitSystemFont(ofSize: 6, weight: .bold)
             let badgeAttrs: [NSAttributedString.Key: Any] = [
                 .font: badgeFont,
                 .foregroundColor: NSColor.white
             ]
             let badgeStr = NSAttributedString(string: "\(runningContainers)", attributes: badgeAttrs)
             let badgeSize = badgeStr.size()
-            let padding: CGFloat = 2
-            let badgeW = max(badgeSize.width + padding * 2, badgeSize.height + padding)
-            let badgeH = badgeSize.height + padding
+            let padding: CGFloat = 1
+            let side = max(badgeSize.width, badgeSize.height) + padding * 2
             let badgeRect = NSRect(
-                x: size.width - badgeW,
+                x: size.width - side,
                 y: 0,
-                width: badgeW,
-                height: badgeH
+                width: side,
+                height: side
             )
-            NSColor.systemOrange.setFill()
-            NSBezierPath(roundedRect: badgeRect, xRadius: badgeH / 2, yRadius: badgeH / 2).fill()
+            NSColor.black.setFill()
+            NSBezierPath(rect: badgeRect).fill()
             let textX = badgeRect.midX - badgeSize.width / 2
             let textY = badgeRect.midY - badgeFont.capHeight / 2 + badgeFont.descender
             badgeStr.draw(at: NSPoint(x: textX, y: textY))
